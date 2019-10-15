@@ -1,57 +1,50 @@
 
+Create or use existing k8s cluster (make sure cluster is single zone - otherwise problems with read only mounted dirs innside pods: https://cloud.ibm.com/docs/containers?topic=containers-cs_troubleshoot_storage
+https://cloud.ibm.com/docs/containers?topic=containers-file_storage 
+
+
+
+
+OLD:
+Use IBM Knative Addon  `0.7.1`     
+https://cloud.ibm.com/docs/containers?topic=containers-serverless-apps-knative
+
+NOTE requirement of `Kubernetes 1.13 AND 1.13 workers` for cluster:
+
+After installation check kafka controller is working:
+
+```
+$ k get pods -n knative-sources
+NAME                         READY   STATUS    RESTARTS   AGE
+kafka-controller-manager-0   1/1     Running   0          23s
+$ k logs kafka-controller-manager-0 -n knative-sources
+2019/09/23 23:27:29 Registering Components.
+2019/09/23 23:27:29 Setting up Controller.
+2019/09/23 23:27:29 Adding the Apache Kafka Source controller.
+2019/09/23 23:27:29 Starting Apache Kafka controller.
+```
+
+
+VERY OLD: (deploying latest version from github should work too but did not have time to test it)
+Follow "Manually installing Knative on IKS"
+https://knative.dev/docs/install/knative-with-iks/
+
+If you see errors like"
+
+```
+unable to recognize "https://github.com/knative/eventing/releases/download/v0.5.0/release.yaml": no matches for kind "ClusterChannelProvisioner" in version "eventing.knative.dev/v1alpha1"
+unable to recognize "https://github.com/knative/eventing/releases/download/v0.5.0/release.yaml": no matches for kind "ClusterChannelProvisioner" in version "eventing.knative.dev/v1alpha1"
+```
+
+then run command again and should be fine.
+
+
 
 # Configure backbone
 
 ...
 
 ===
-
-
-[1] persistent Strimiz not working ...
-
-in logs
-
-
-```
-k -n kafka logs my-cluster-zookeeper-0 zookeeper
-Detected Zookeeper ID 1
-mkdir: cannot create directory '/var/lib/zookeeper/data': Permission denied
-/opt/kafka/zookeeper_run.sh: line 25: /var/lib/zookeeper/data/myid: No such file or directory
-...
-2019-05-14 19:55:38,032 ERROR Unexpected exception, exiting abnormally (org.apache.zookeeper.server.ZooKeeperServerMain) [main]
-java.io.IOException: Unable to create data directory /var/lib/zookeeper/data/version-2
-	at org.apache.zookeeper.server.persistence.FileTxnSnapLog.<init>(FileTxnSnapLog.java:87)
-	at org.apache.zookeeper.server.ZooKeeperServerMain.runFromConfig(ZooKeeperServerMain.java:112)
-	at org.apache.zookeeper.server.ZooKeeperServerMain.initializeAndRun(ZooKeeperServerMain.java:89)
-	at org.apache.zookeeper.server.ZooKeeperServerMain.main(ZooKeeperServerMain.java:55)
-	at org.apache.zookeeper.server.quorum.QuorumPeerMain.initializeAndRun(QuorumPeerMain.java:119)
-	at org.apache.zookeeper.server.quorum.QuorumPeerMain.main(QuorumPeerMain.java:81)
-```
-
-Persistent Strimiz uses PVC:
-
-```
-$ k -n kafka describe pod my-cluster-zookeeper-0
-...
-  data:
-    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
-    ClaimName:  data-my-cluster-zookeeper-0
-    ReadOnly:   false
-...
-Events:
-  Type     Reason            Age                     From                     Message
-  ----     ------            ----                    ----                     -------
-  Warning  FailedScheduling  3m56s (x13 over 4m43s)  default-scheduler        pod has unbound immediate PersistentVolumeClaims (repeated 2 times)
-```
-
-PVC shows RWO but it is somehow not writable by Strimzi ...
-
-
-```
-(base) aslom@m ~ $ kubectl get pv
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                               STORAGECLASS       REASON   AGE
-pvc-aae67e54-7681-11e9-8509-1ed58aace119   100Gi      RWO            Delete           Bound    kafka/data-my-cluster-zookeeper-0   ibmc-file-bronze            3m13s
-```
 
 
 

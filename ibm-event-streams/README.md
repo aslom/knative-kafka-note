@@ -1,12 +1,12 @@
-Create or use existing k8s cluster (make sure cluster is single zone - otherwise problems with read only mounted dirs innside pods: https://cloud.ibm.com/docs/containers?topic=containers-cs_troubleshoot_storage
-https://cloud.ibm.com/docs/containers?topic=containers-file_storage 
 
 
-# Configure event streams
+# Configure Event Streams
 
-Create topic names "my-topic"
+Follow [instructions](https://cloud.ibm.com/docs/services/EventStreams?topic=eventstreams-connecting#connect_enterprise_external_console
+) to get JSON configutation such as:
 
-Get credentials
+
+
 
 ```
 
@@ -33,225 +33,33 @@ Get credentials
 }
 ```
 
-#  Install Strimzi
-
-Follow
-https://strimzi.io/quickstarts/minikube/
 
 
-But for cluster creation  use ephemeral strimzi 
-
-```
-kubectl apply -f https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/0.13.0/examples/kafka/kafka-ephemeral.yaml -n kafka
-```
-
-(persistent fails currently in starange ways [1])
-
-End with
-`kafka.kafka.strimzi.io/my-cluster created`
-
-
-
-Verify
-
-```
-$ k -n kafka get pods
-NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-entity-operator-67c5c49f76-vg4d4   3/3     Running   0          14m
-my-cluster-kafka-0                            2/2     Running   0          15m
-my-cluster-kafka-1                            2/2     Running   0          15m
-my-cluster-kafka-2                            2/2     Running   0          15m
-my-cluster-zookeeper-0                        2/2     Running   0          16m
-my-cluster-zookeeper-1                        2/2     Running   0          16m
-my-cluster-zookeeper-2                        2/2     Running   0          16m
-strimzi-cluster-operator-646cdc566b-px9c2     1/1     Running   0          18m
-```
-
-
-# Install Knative v0.9
-
-
-Install Kafka if not installed:
-
-```
-k apply -f https://github.com/knative/eventing-contrib/releases/download/v0.9.0/kafka-channel.yaml
-k apply -f https://github.com/knative/eventing-contrib/releases/download/v0.9.0/kafka-source.yaml
-```
-
-
-OLD:
-Use IBM Knative Addon  `0.7.1`     
-https://cloud.ibm.com/docs/containers?topic=containers-serverless-apps-knative
-
-NOTE requirement of `Kubernetes 1.13 AND 1.13 workers` for cluster:
-
-After installation check kafka controller is working:
-
-```
-$ k get pods -n knative-sources
-NAME                         READY   STATUS    RESTARTS   AGE
-kafka-controller-manager-0   1/1     Running   0          23s
-$ k logs kafka-controller-manager-0 -n knative-sources
-2019/09/23 23:27:29 Registering Components.
-2019/09/23 23:27:29 Setting up Controller.
-2019/09/23 23:27:29 Adding the Apache Kafka Source controller.
-2019/09/23 23:27:29 Starting Apache Kafka controller.
-```
-
-
-VERY OLD: (deploying latest version from github should work too but did not have time to test it)
-Follow "Manually installing Knative on IKS"
-https://knative.dev/docs/install/knative-with-iks/
-
-If you see errors like"
-
-```
-unable to recognize "https://github.com/knative/eventing/releases/download/v0.5.0/release.yaml": no matches for kind "ClusterChannelProvisioner" in version "eventing.knative.dev/v1alpha1"
-unable to recognize "https://github.com/knative/eventing/releases/download/v0.5.0/release.yaml": no matches for kind "ClusterChannelProvisioner" in version "eventing.knative.dev/v1alpha1"
-```
-
-then run command again and should be fine.
-
-
-# Create Strimzi based event source
-
-
-
-Creating topic by running kafka producer:
-(see https://strimzi.io/quickstarts/minikube/ for details)
-
-```
-kubectl -n kafka run kafka-producer -ti --image=strimzi/kafka:0.13.0-kafka-2.3.0 --rm=true --restart=Never -- bin/kafka-console-producer.sh --broker-list my-cluster-kafka-bootstrap:9092 --topic my-topic
-```
-
-And to receive them in a different terminal you can run:
-
-```
-kubectl -n kafka run kafka-consumer -ti --image=strimzi/kafka:0.13.0-kafka-2.3.
-```
-
-
-Make sure event-display is deployed:
-```
-$ k apply -f https://github.com/knative/eventing-contrib/releases/download/v0.9.0/event-display.yaml
-service.serving.knative.dev/event-display created
-```
-
-
-
-Copy and edit event-source.yaml following instructions -  for Strimiz setup described above that should work:
-
-
-```
-$ cat kafka-source.yaml
-apiVersion: sources.eventing.knative.dev/v1alpha1
-kind: KafkaSource
-metadata:
-  name: kafka-source
-spec:
-  consumerGroup: knative-group
-  bootstrapServers: my-cluster-kafka-bootstrap.kafka:9092 #note the .kafka in URL for namespace
-  topics: my-topic
-  sink:
-    apiVersion: serving.knative.dev/v1alpha1
-    kind: Service
-    name: event-display
-```
-
-and create event source:
-
-```
-$ k apply -f kafka-source.yaml
-kafkasource.sources.eventing.knative.dev/kafka-source created
-```
-
-check logs kafka source: created:
-
-```
-$ k get pods
-NAME                                  READY   STATUS    RESTARTS   AGE
-kafka-source-fzttw-6ff7d4896b-zrf6p   1/1     Running   0          68s
-$ k logs kafka-source-fzttw-6ff7d4896b-zrf6p
-{"level":"info","ts":"2019-09-23T23:51:19.959Z","caller":"receive_adapter/main.go:110","msg":"Starting Apache Kafka Receive Adapter...","BootstrapServers":"my-cluster-kafka-bootstrap.kafka:9092","Topics":"my-topic","ConsumerGroup":"knative-group","SinkURI":"http://event-display.default.svc.cluster.local","SASL":false,"TLS":false}
-{"level":"info","ts":"2019-09-23T23:51:19.959Z","caller":"adapter/adapter.go:122","msg":"Starting with config: ","BootstrapServers":"my-cluster-kafka-bootstrap.kafka:9092","Topics":"my-topic","ConsumerGroup":"knative-group","SinkURI":"http://event-display.default.svc.cluster.local","Name":"kafka-source","Namespace":"default","SASL":false,"TLS":false}
-{"level":"info","ts":"2019-09-23T23:51:23.088Z","caller":"kafka/consumer_handler.go:65","msg":"Starting Consumer Group Handler, topic: my-topic"}
-````
-
-
-If kafka-source pod is not created in default namespace Status/Conditions in:
-
-```
-$ k describe kafkasource.sources.eventing.knative.dev/kafka-source
-```
-
-And check kafka controller logs , for example:
-
-```
-$ k logs kafka-controller-manager-0 -n knative-sources
-...
-{"level":"info","ts":"2019-07-24T00:24:43.394Z","caller":"reconciler/kafkasource.go:98","msg":"Reconciling new source: ","knative.dev/controller":"kafka-controller","request":"default/kafka-source","source":{"kind":"KafkaSource","apiVersion":"sources.eventing.knative.dev/v1alpha1","metadata":{"name":"kafka-source","namespace":"default","selfLink":"/apis/sources.eventing.knative.dev/v1alpha1/namespaces/default/kafkasources/kafka-source","uid":"694a2826-ada9-11e9-9bff-ce023c9439ca","resourceVersion":"169235","generation":2,"creationTimestamp":"2019-07-24T00:24:33Z","annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\"apiVersion\":\"sources.eventing.knative.dev/v1alpha1\",\"kind\":\"KafkaSource\",\"metadata\":{\"annotations\":{},\"name\":\"kafka-source\",\"namespace\":\"default\"},\"spec\":{\"bootstrapServers\":\"my-cluster-kafka-bootstrap.kafka:9092\",\"consumerGroup\":\"knative-group\",\"sink\":{\"apiVersion\":\"serving.knative.dev/v1alpha1\",\"kind\":\"Service\",\"name\":\"event-display\"},\"topics\":\"knative-demo-topic\"}}\n"}},"spec":{"bootstrapServers":"my-cluster-kafka-bootstrap.kafka:9092","topics":"knative-demo-topic","consumerGroup":"knative-group","net":{"sasl":{"user":{},"password":{}},"tls":{"cert":{},"key":{},"caCert":{}}},"sink":{"kind":"Service","name":"event-display","apiVersion":"serving.knative.dev/v1alpha1"},"resources":{"requests":{},"limits":{}}},"status":{"conditions":[{"type":"Deployed","status":"Unknown","lastTransitionTime":"2019-07-24T00:24:33Z"},{"type":"Ready","status":"False","lastTransitionTime":"2019-07-24T00:24:33Z","reason":"NotFound"},{"type":"SinkProvided","status":"False","lastTransitionTime":"2019-07-24T00:24:33Z","reason":"NotFound"}]}}}
-{"level":"warn","ts":"2019-07-24T00:24:43.406Z","caller":"sdk/reconciler.go:76","msg":"Failed to reconcile &TypeMeta{Kind:,APIVersion:,}: sink \"default/event-display\" (serving.knative.dev/v1alpha1, Kind=Service) does not contain address","knative.dev/controller":"kafka-controller","request":"default/kafka-source"}
-```
-
-To test that event source works use two windows - one to send event and another to see it.
-
-
-In one window:
-
-```
-kubectl -n kafka run kafka-producer -ti --image=strimzi/kafka:0.11.3-kafka-2.1.0 --rm=true --restart=Never -- bin/kafka-console-producer.sh --broker-list my-cluster-kafka-bootstrap.kafka:9092 --topic knative-demo-topic
-If you don't see a command prompt, try pressing enter.
->{"msg": "This is a test2!"}
-```
-
-in other window verify event was received:
-
-```
-(base) aslom@m knative $ kubectl get pods
-NAME                                              READY   STATUS     RESTARTS   AGE
-event-display-jv2hj-deployment-7b85d7bbbf-vwtc6   0/3     Init:0/1   0          4s
-kafka-source-5lsl8-d4c5f6885-lgvgh                2/2     Running    1          5m20s
-kafka-source-strimzi-92rpc-694ff8fd-m5zzk         2/2     Running    1          30h
-(base) aslom@m knative $ kubectl get pods
-NAME                                              READY   STATUS    RESTARTS   AGE
-event-display-jv2hj-deployment-7b85d7bbbf-vwtc6   2/3     Running   0          9s
-kafka-source-5lsl8-d4c5f6885-lgvgh                2/2     Running   1          5m25s
-kafka-source-strimzi-92rpc-694ff8fd-m5zzk         2/2     Running   1          30h
-
-(base) aslom@m knative $ k logs event-display-jv2hj-deployment-7b85d7bbbf-vwtc6 user-container
-☁️  cloudevents.Event
-Validation: valid
-Context Attributes,
-  specversion: 0.2
-  type: dev.knative.kafka.event
-  source: /apis/v1/namespaces/default/kafkasources/kafka-source#knative-demo-topic
-  id: partition:2/offset:0
-  time: 2019-05-16T03:23:28.94Z
-  contenttype: application/json
-Extensions,
-  key:
-Data,
-  {
-    "msg": "This is a test2!"
-  }
-  ```
-
-
-# Configure Knative event source that uses Event Streams
+# Create topic names "my-topic" in Event Streams.
 
 
 Create topic in Event Stream:
+
+Using kafka_2.12-2.3.0 (download form Apache webiste)
 
 ```
 ./bin/kafka-topics.sh --create --bootstrap-server broker-0-33rc6rhn7fw8k0q4.kafka.svc01.us-south.eventstreams.cloud.ibm.com:9093 --command-config ../ibmes1.properties --topic my-topic --replication-factor 3 --partitions 1
 ```
 
+and check that topic is created
+
 ```
-$ ./bin/kafka-topics.sh --list --bootstrap-server broker-0-33rc6rhn7fw8k0q4.kafka.svc01.us-south.eventstreams.cloud.ibm.com:9093 --command-config ../ibmes1.properties
+./bin/kafka-topics.sh --list --bootstrap-server broker-0-33rc6rhn7fw8k0q4.kafka.svc01.us-south.eventstreams.cloud.ibm.com:9093 --command-config ../ibmes1.properties 
+```
+
+output
+
+```
 my-topic
 ```
 
-Verify topic is working:
+
+# Verify access to Event Streams works from you laptop
 
 ```
 ./bin/kafka-console-producer.sh --broker-list broker-0-33rc6rhn7fw8k0q4.kafka.svc01.us-south.eventstreams.cloud.ibm.com:9093 --producer.config ../ibmes1.properties --topic my-topic
@@ -260,6 +68,161 @@ Verify topic is working:
 ```
 ./bin/kafka-console-consumer.sh --bootstrap-server broker-0-33rc6rhn7fw8k0q4.kafka.svc01.us-south.eventstreams.cloud.ibm.com:9093 --consumer.config ../ibmes1.properties --topic my-topic --from-beginning
 ```
+
+
+# Verify access to Event Streams from your cluster
+
+
+
+# Run test event sink
+
+Using event-dsiplay and adapting getting started instrucitons to setup test environment: https://knative.dev/docs/eventing/getting-started/
+
+
+
+```bash
+kubectl apply --filename - << END
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-display
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &labels
+      app: hello-display
+  template:
+    metadata:
+      labels: *labels
+    spec:
+      containers:
+        - name: event-display
+          # Source code: https://github.com/knative/eventing-contrib/blob/release-0.6/cmd/event_display/main.go
+          image: gcr.io/knative-releases/github.com/knative/eventing-sources/cmd/event_display@sha256:37ace92b63fc516ad4c8331b6b3b2d84e4ab2d8ba898e387c0b6f68f0e3081c4
+
+---
+
+# Service pointing at the previous Deployment. This will be the target for event
+# consumption.
+  kind: Service
+  apiVersion: v1
+  metadata:
+    name: hello-display
+  spec:
+    selector:
+      app: hello-display
+    ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+END
+```
+
+
+```
+kubectl get deployments hello-display
+```
+
+expected output:
+
+```
+NAME            READY   UP-TO-DATE   AVAILABLE   AGE
+hello-display   1/1     1            1           5s
+```
+
+
+# Send test event directly to event sink
+
+
+```bash
+kubectl apply --filename - << END
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: curl
+  name: curl
+spec:
+  containers:
+    # This could be any image that we can SSH into and has curl.
+  - image: radial/busyboxplus:curl
+    imagePullPolicy: IfNotPresent
+    name: curl
+    resources: {}
+    stdin: true
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    tty: true
+END
+```
+
+Send events
+
+```
+kubectl attach curl -it
+```
+
+Inside
+
+```
+curl -v "hello-display.default.svc.cluster.local" \
+  -X POST \
+  -H "Ce-Id: say-hello" \
+  -H "Ce-Specversion: 0.2" \
+  -H "Ce-Type: greeting" \
+  -H "Ce-Source: not-sendoff" \
+  -H "Content-Type: application/json" \
+  -d '{"msg":"Hello Knative!"}'
+
+```
+
+expected output:
+
+```
+> POST / HTTP/1.1
+> User-Agent: curl/7.35.0
+> Host: hello-display.default.svc.cluster.local
+> Accept: */*
+> Ce-Id: say-hello
+> Ce-Specversion: 0.2
+> Ce-Type: greeting
+> Ce-Source: not-sendoff
+> Content-Type: application/json
+> Content-Length: 24
+>
+< HTTP/1.1 202 Accepted
+< Content-Length: 0
+< Date: Tue, 15 Oct 2019 03:00:16 GMT
+<
+```
+
+And check that it was received:
+
+
+```
+kubectl logs -l app=hello-display --tail=100
+```
+
+Expected output
+
+```
+☁️  cloudevents.Event
+Validation: valid
+Context Attributes,
+  specversion: 0.2
+  type: greeting
+  source: not-sendoff
+  id: say-hello
+  contenttype: application/json
+Data,
+  {
+    "msg": "Hello Knative!"
+  }
+```
+
+
+
+# Configure secret
 
 Create secret with user and password from JSON
 
@@ -281,6 +244,20 @@ stringData:
 k apply -f secret.yaml
 k get secret es1secret -o yaml
 ```
+
+
+# Install Knative addon
+
+Follow [instructions](https://cloud.ibm.com/docs/containers?topic=containers-serverless-apps-knative#knative-setup)
+
+Install Knative Kafka source if not installed:
+
+```
+k apply -f https://github.com/knative/eventing-contrib/releases/download/v0.9.0/kafka-source.yaml
+```
+
+
+# Create knative source for Event Streams topic
 
 create ibmes1.yaml file that references secret created above:
 
@@ -368,7 +345,7 @@ kafka-source-strimzi-92rpc-694ff8fd-m5zzk   2/2     Running   1          30h
 ```
 
 
-# Send test message to event streams
+# Send test message to Event Streams using Kafka client
 
 I have use Apache Kafka Quickstart for kafka_2.11-2.0.0 with properties file:
 
