@@ -72,7 +72,7 @@ my-topic
 
 # Verify access to Event Streams from your cluster
 
-
+TBW
 
 # Run test event sink
 
@@ -222,7 +222,7 @@ Data,
 
 
 
-# Configure secret
+# Configure Event Stream Kubernetes secret
 
 Create secret with user and password from JSON
 
@@ -250,7 +250,7 @@ k get secret es1secret -o yaml
 
 Follow [instructions](https://cloud.ibm.com/docs/containers?topic=containers-serverless-apps-knative#knative-setup)
 
-Install Knative Kafka source if not installed:
+TODO VERIFY: Install Knative Kafka source if not installed:
 
 ```
 k apply -f https://github.com/knative/eventing-contrib/releases/download/v0.9.0/kafka-source.yaml
